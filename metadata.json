@@ -1,0 +1,6 @@
+{
+  "name": "UniLab — University Laboratory Management System",
+  "description": "Enterprise laboratory management platform for university laboratories, equipment tracking, physical location management, inventory, and role-based monitoring.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

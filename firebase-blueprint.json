@@ -1,0 +1,133 @@
+{
+  "entities": {
+    "laboratory": {
+      "title": "Laboratory",
+      "description": "BBSUTSD Department Laboratory Facility",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "department": { "type": "string" },
+        "building": { "type": "string" },
+        "floor": { "type": "string" },
+        "roomNumber": { "type": "string" },
+        "capacity": { "type": "number" },
+        "assignedAssistantId": { "type": "string" },
+        "assignedAssistantName": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "maintenance", "closed"] },
+        "totalEquipmentCount": { "type": "number" },
+        "activeIssuesCount": { "type": "number" },
+        "contactExtension": { "type": "string" }
+      },
+      "required": ["id", "code", "name", "department", "status"]
+    },
+    "equipment": {
+      "title": "Equipment",
+      "description": "Laboratory Equipment Asset Item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "assetTag": { "type": "string" },
+        "serialNumber": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "model": { "type": "string" },
+        "manufacturer": { "type": "string" },
+        "labId": { "type": "string" },
+        "status": { "type": "string", "enum": ["available", "issued", "maintenance", "damaged", "reserved"] },
+        "condition": { "type": "string", "enum": ["excellent", "good", "fair", "damaged"] },
+        "purchaseDate": { "type": "string" },
+        "cost": { "type": "number" }
+      },
+      "required": ["id", "assetTag", "name", "labId", "status", "condition"]
+    },
+    "issueRecord": {
+      "title": "IssueRecord",
+      "description": "Equipment checkout loan record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "issueCode": { "type": "string" },
+        "equipmentId": { "type": "string" },
+        "equipmentName": { "type": "string" },
+        "assetTag": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "studentRollNo": { "type": "string" },
+        "studentEmail": { "type": "string" },
+        "labId": { "type": "string" },
+        "labName": { "type": "string" },
+        "issuedByAssistantId": { "type": "string" },
+        "issuedByAssistantName": { "type": "string" },
+        "issueDate": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "issueTime": { "type": "string" },
+        "dueTime": { "type": "string" },
+        "durationDays": { "type": "number" },
+        "durationHours": { "type": "number" },
+        "durationMinutes": { "type": "number" },
+        "purpose": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "returned", "overdue", "damaged"] },
+        "conditionAtIssue": { "type": "string" },
+        "conditionAtReturn": { "type": "string" },
+        "returnDate": { "type": "string" },
+        "remarks": { "type": "string" }
+      },
+      "required": ["id", "equipmentId", "assetTag", "studentName", "studentRollNo", "studentEmail", "issueDate", "dueDate", "status"]
+    },
+    "student": {
+      "title": "Student",
+      "description": "BBSUTSD Registered Student Borrower",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "rollNumber": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "department": { "type": "string" },
+        "phone": { "type": "string" },
+        "clearanceStatus": { "type": "string", "enum": ["cleared", "hold", "pending"] }
+      },
+      "required": ["id", "rollNumber", "name", "email", "department"]
+    },
+    "activityLog": {
+      "title": "ActivityLog",
+      "description": "Circulation or equipment audit log item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "userName": { "type": "string" },
+        "userRole": { "type": "string" },
+        "action": { "type": "string" },
+        "target": { "type": "string" },
+        "details": { "type": "string" },
+        "type": { "type": "string" }
+      },
+      "required": ["id", "timestamp", "userName", "action", "target"]
+    }
+  },
+  "firestore": {
+    "/laboratories/{labId}": {
+      "schema": "laboratory",
+      "description": "Collection of department laboratory facilities"
+    },
+    "/equipment/{equipmentId}": {
+      "schema": "equipment",
+      "description": "Collection of all laboratory equipment assets"
+    },
+    "/issueRecords/{recordId}": {
+      "schema": "issueRecord",
+      "description": "Active and historical equipment issue loan records"
+    },
+    "/students/{studentId}": {
+      "schema": "student",
+      "description": "Registered students database for borrower checks"
+    },
+    "/activityLogs/{logId}": {
+      "schema": "activityLog",
+      "description": "Real-time activity audit events"
+    }
+  }
+}

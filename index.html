@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      // Defensive initialization: ensure window.fetch has both getter and setter in iframe environments
+      (function() {
+        try {
+          var nativeFetch = window.fetch;
+          if (typeof nativeFetch === 'function') {
+            var _curFetch = nativeFetch;
+            try {
+              Object.defineProperty(window, 'fetch', {
+                get: function() {
+                  return _curFetch;
+                },
+                set: function(fn) {
+                  _curFetch = fn;
+                },
+                configurable: true,
+                enumerable: true
+              });
+            } catch (_err1) {
+              try {
+                var proto = Object.getPrototypeOf(window);
+                if (proto) {
+                  Object.defineProperty(proto, 'fetch', {
+                    get: function() { return _curFetch; },
+                    set: function(fn) { _curFetch = fn; },
+                    configurable: true
+                  });
+                }
+              } catch (_err2) {}
+            }
+          }
+        } catch (_e) {}
+      })();
+    </script>
+    <title>BBSUTSD — The Benazir Bhutto Shaheed University of Technology and Skill Development, Khairpur</title>
+    <meta name="description" content="The Benazir Bhutto Shaheed University of Technology and Skill Development, Khairpur — Central Laboratory Directorate, equipment tracking, physical location management, inventory, and role-based monitoring." />
+    <meta property="og:title" content="BBSUTSD — University Laboratory Management System" />
+    <meta property="og:description" content="Central Laboratory Directorate &amp; Asset Management for The Benazir Bhutto Shaheed University of Technology and Skill Development, Khairpur." />
+    <link rel="icon" type="image/png" href="/mainlogo.png" />
+    <link rel="apple-touch-icon" href="/mainlogo.png" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  </head>
+  <body class="bg-[#0c0908] text-[#f5efe8] antialiased font-sans selection:bg-red-950 selection:text-red-200">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
