@@ -16,7 +16,7 @@ import { UniversityLogo } from '../common/UniversityLogo';
 
 interface HeaderProps {
   currentUser: User;
-  onRoleChange: (role: UserRole) => void;
+  onRoleChange?: (role: UserRole) => void;
   activeModule: ActiveNavModule;
   onNavigate: (module: ActiveNavModule) => void;
   notifications: NotificationItem[];
@@ -140,31 +140,15 @@ export const Header: React.FC<HeaderProps> = ({
           <Search className="h-4 w-4 text-red-400" />
         </button>
 
-        {/* Role Switcher (HOD / Admin & Lab Assistant Only) */}
-        <div className="hidden lg:flex items-center rounded-xl border border-[#33201d] bg-[#17100f] p-0.5 text-xs font-medium text-[#a39589]">
-          <span className="px-2.5 text-[10px] font-semibold text-[#827164] uppercase tracking-wider">
-            Active Role:
+        {/* Secure Session Display (Role Switcher Removed for Strict Authentication) */}
+        <div className="hidden lg:flex items-center gap-2 rounded-xl border border-[#33201d] bg-[#17100f] px-3 py-1.5 text-xs">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="text-[10px] font-semibold text-[#827164] uppercase tracking-wider">
+            Portal:
           </span>
-          <button
-            onClick={() => onRoleChange('HOD_ADMIN')}
-            className={`rounded-lg px-2.5 py-1 transition-all duration-200 ${
-              currentUser.role === 'HOD_ADMIN'
-                ? 'bg-gradient-to-r from-red-950 to-red-900 text-red-100 border border-red-700/60 shadow-[0_0_10px_rgba(220,38,38,0.3)] font-semibold'
-                : 'text-[#9c8c7f] hover:text-[#f5efe8] hover:bg-[#221614]'
-            }`}
-          >
-            HOD / Admin
-          </button>
-          <button
-            onClick={() => onRoleChange('LAB_ASSISTANT')}
-            className={`rounded-lg px-2.5 py-1 transition-all duration-200 ${
-              currentUser.role === 'LAB_ASSISTANT'
-                ? 'bg-gradient-to-r from-red-950 to-red-900 text-red-100 border border-red-700/60 shadow-[0_0_10px_rgba(220,38,38,0.3)] font-semibold'
-                : 'text-[#9c8c7f] hover:text-[#f5efe8] hover:bg-[#221614]'
-            }`}
-          >
-            Lab Assistant
-          </button>
+          <span className="font-semibold text-red-300">
+            {currentUser.role === 'HOD_ADMIN' ? 'HOD / Central Directorate' : 'Assigned Lab Assistant'}
+          </span>
         </div>
 
         {/* Notifications Popover */}
@@ -278,39 +262,22 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               </div>
 
-              {/* Mobile Quick Role Switcher */}
-              <div className="lg:hidden border-b border-[#241715] p-2 mb-1">
-                <p className="text-[10px] font-semibold text-[#8f7e71] uppercase tracking-wider mb-1.5">
-                  Switch Active Role
-                </p>
-                <div className="grid grid-cols-2 gap-1.5 text-[11px]">
-                  <button
-                    onClick={() => {
-                      onRoleChange('HOD_ADMIN');
-                      setShowUserMenu(false);
-                    }}
-                    className={`rounded-lg px-2 py-1 text-center font-medium ${
-                      currentUser.role === 'HOD_ADMIN'
-                        ? 'bg-red-950 text-red-100 border border-red-800'
-                        : 'bg-[#221614] text-[#a39589]'
-                    }`}
-                  >
-                    HOD / Admin
-                  </button>
-                  <button
-                    onClick={() => {
-                      onRoleChange('LAB_ASSISTANT');
-                      setShowUserMenu(false);
-                    }}
-                    className={`rounded-lg px-2 py-1 text-center font-medium ${
-                      currentUser.role === 'LAB_ASSISTANT'
-                        ? 'bg-red-950 text-red-100 border border-red-800'
-                        : 'bg-[#221614] text-[#a39589]'
-                    }`}
-                  >
-                    Lab Assistant
-                  </button>
+              {/* Security & Role Information */}
+              <div className="border-b border-[#241715] p-2.5 mb-1 bg-[#140d0c]/50 rounded-xl mx-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-semibold text-[#8f7e71] uppercase tracking-wider">
+                    Role Verification
+                  </span>
+                  <span className="text-[9px] font-mono text-emerald-400 bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-800/40">
+                    Active Session
+                  </span>
                 </div>
+                <p className="text-xs font-semibold text-stone-200 mt-1">
+                  {currentUser.role === 'HOD_ADMIN' ? 'HOD / Central Directorate' : 'Assigned Lab Assistant'}
+                </p>
+                <p className="text-[10px] text-[#7d6c60] mt-0.5">
+                  To switch portals, please sign out and authenticate.
+                </p>
               </div>
 
               <div className="space-y-0.5">

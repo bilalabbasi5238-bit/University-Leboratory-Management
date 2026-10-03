@@ -3,7 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  KeyRound,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  UserCheck,
+  Mail,
+  Lock,
+} from 'lucide-react';
 import {
   User,
   UserRole,
@@ -62,6 +71,7 @@ import {
   subscribeToLaboratories,
   subscribeToStudents,
   saveLaboratoryToFirestore,
+  deleteLaboratoryFromFirestore,
   saveEquipmentToFirestore,
   saveStudentToFirestore,
   seedFirestoreIfEmpty,
@@ -102,6 +112,13 @@ export default function App() {
   const [newLabCapacity, setNewLabCapacity] = useState(30);
   const [newLabExt, setNewLabExt] = useState('Ext. 1000');
 
+  // Dedicated Assistant Login Credentials for this new facility
+  const [newLabAssistantName, setNewLabAssistantName] = useState('');
+  const [newLabAssistantEmail, setNewLabAssistantEmail] = useState('');
+  const [newLabAssistantPassword, setNewLabAssistantPassword] = useState('');
+  const [newLabAssistantPhone, setNewLabAssistantPhone] = useState('');
+  const [showNewAssistantPassword, setShowNewAssistantPassword] = useState(false);
+
   // Form states for Add Equipment
   const [newEqName, setNewEqName] = useState('');
   const [newEqAssetTag, setNewEqAssetTag] = useState('');
@@ -115,6 +132,9 @@ export default function App() {
 
   // Firebase connection state
   const [isFirebaseLive, setIsFirebaseLive] = useState(false);
+
+  // Custom logged-in user profile (for newly created lab assistants)
+  const [customLoggedInUser, setCustomLoggedInUser] = useState<User | null>(null);
 
   // Initialize and synchronize with Firebase Firestore
   useEffect(() => {
@@ -164,14 +184,49 @@ export default function App() {
     };
   }, []);
 
-  // Current active user object (strictly HOD_ADMIN or LAB_ASSISTANT)
+  // Current active user object (strictly HOD_ADMIN or custom/default LAB_ASSISTANT)
   const currentUser: User =
-    currentUserRole === 'HOD_ADMIN' ? mockUsers.admin : mockUsers.lab_assistant;
+    customLoggedInUser
+      ? customLoggedInUser
+      : currentUserRole === 'HOD_ADMIN'
+      ? mockUsers.admin
+      : mockUsers.lab_assistant;
+
+  // Compute all lab assistants dynamically including new laboratory in-charges
+  const allLabAssistants = useMemo(() => {
+    const dynamicAssistants = laboratories
+      .filter((lab) => Boolean(lab.assistantEmail))
+      .map((lab) => ({
+        id: lab.assignedAssistantId || `ast-${lab.id}`,
+        staffId:
+          lab.assistantStaffId ||
+          `BBSUTSD-STF-${lab.code.replace(/[^A-Z0-9]/g, '').slice(0, 6)}`,
+        name: lab.assistantName || lab.assignedAssistantName || 'Lab Assistant',
+        email: lab.assistantEmail!,
+        department: lab.department,
+        phone: lab.assistantPhone || lab.contactExtension || '+92 300 0000000',
+        assignedLabs: [
+          {
+            id: lab.id,
+            name: lab.name,
+            code: lab.code,
+          },
+        ],
+        activeSupervisionCount: lab.activeIssuesCount || 0,
+      }));
+    return [...mockLabAssistants, ...dynamicAssistants];
+  }, [laboratories]);
 
   // Add Laboratory Submit Handler
   const handleAddLaboratorySubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newLabName.trim() || !newLabCode.trim()) return;
+
+    const assistantName = newLabAssistantName.trim() || 'Assigned Lab Assistant';
+    const assistantEmail = newLabAssistantEmail.trim().toLowerCase();
+    const assistantPassword = newLabAssistantPassword.trim();
+    const assistantStaffId = `BBSUTSD-STF-${Math.floor(1000 + Math.random() * 9000)}`;
+    const assistantPhone = newLabAssistantPhone.trim() || '+92 300 1234567';
 
     const newLab: Laboratory = {
       id: `lab-${Date.now()}`,
@@ -182,8 +237,13 @@ export default function App() {
       floor: newLabFloor.trim(),
       roomNumber: newLabRoom.trim() || 'Room 101',
       capacity: Number(newLabCapacity) || 30,
-      assignedAssistantId: mockUsers.lab_assistant.id,
-      assignedAssistantName: mockUsers.lab_assistant.name,
+      assignedAssistantId: `usr-asst-${Date.now()}`,
+      assignedAssistantName: assistantName,
+      assistantName: assistantName,
+      assistantEmail: assistantEmail || undefined,
+      assistantPassword: assistantPassword || undefined,
+      assistantStaffId: assistantStaffId,
+      assistantPhone: assistantPhone,
       status: 'active',
       totalEquipmentCount: 0,
       activeIssuesCount: 0,
@@ -200,16 +260,75 @@ export default function App() {
       userRole: currentUser.role,
       action: 'Facility Registered' as const,
       target: `${newLab.code} (${newLab.name})`,
-      details: `Registered facility in ${newLab.building} · Supervised by ${mockUsers.lab_assistant.name}`,
+      details: `Registered facility in ${newLab.building}. Assistant: ${assistantName}${assistantEmail ? ` (${assistantEmail})` : ''}`,
       type: 'system' as const,
     };
     setActivityLogs((prev) => [logEntry, ...prev]);
     logActivityToFirestore(logEntry).catch(() => {});
 
+    // Add alert notification
+    const notif: NotificationItem = {
+      id: `notif-${Date.now()}`,
+      title: 'Facility & Assistant Account Created',
+      message: `${newLab.name} registered. ${assistantEmail ? `Login ready for assistant ${assistantEmail}.` : ''}`,
+      type: 'success',
+      timestamp: 'Just now',
+      read: false,
+    };
+    setNotifications((prev) => [notif, ...prev]);
+
     setShowAddLabModal(false);
     setNewLabName('');
     setNewLabCode('');
     setNewLabRoom('');
+    setNewLabAssistantName('');
+    setNewLabAssistantEmail('');
+    setNewLabAssistantPassword('');
+    setNewLabAssistantPhone('');
+  };
+
+  // Delete Laboratory Handler for HOD Portal
+  const handleDeleteLaboratory = (labId: string) => {
+    const labToDelete = laboratories.find((l) => l.id === labId);
+
+    // 1. Remove from local React state
+    setLaboratories((prev) => prev.filter((l) => l.id !== labId));
+    if (selectedLab?.id === labId) {
+      setSelectedLab(null);
+    }
+
+    // 2. Remove from Firebase Firestore
+    deleteLaboratoryFromFirestore(labId).catch(() => {});
+
+    // 3. Unassign any equipment assigned to this lab
+    setEquipmentList((prev) =>
+      prev.map((e) => (e.labId === labId ? { ...e, labId: '' } : e))
+    );
+
+    // 4. Log in Institutional Activity Stream
+    const logEntry = {
+      id: `act-${Date.now()}`,
+      timestamp: 'Just now',
+      userName: currentUser.name,
+      userRole: currentUser.role,
+      action: 'Facility Deleted' as const,
+      target: labToDelete ? `${labToDelete.code} (${labToDelete.name})` : labId,
+      details: `Facility record and associated credentials permanently removed by HOD.`,
+      type: 'system' as const,
+    };
+    setActivityLogs((prev) => [logEntry, ...prev]);
+    logActivityToFirestore(logEntry).catch(() => {});
+
+    // 5. System Notification
+    const notif: NotificationItem = {
+      id: `notif-${Date.now()}`,
+      title: 'Facility Record Deleted',
+      message: `${labToDelete?.name || 'Laboratory'} (${labToDelete?.code || 'Code'}) was deleted by HOD.`,
+      type: 'warning',
+      timestamp: 'Just now',
+      read: false,
+    };
+    setNotifications((prev) => [notif, ...prev]);
   };
 
   // Add Equipment Submit Handler
@@ -285,19 +404,23 @@ export default function App() {
   };
 
   // Handles successful authentication and role redirection
-  const handleLoginSuccess = (role: UserRole) => {
+  const handleLoginSuccess = (role: UserRole, customUser?: User) => {
     setCurrentUserRole(role);
+    setCustomLoggedInUser(customUser || null);
     setIsAuthenticated(true);
     setActiveModule('dashboard');
   };
 
   const handleRoleChange = (newRole: UserRole) => {
     setCurrentUserRole(newRole);
+    setCustomLoggedInUser(null);
     setActiveModule('dashboard');
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
+    setCustomLoggedInUser(null);
+    setCurrentUserRole('HOD_ADMIN');
     setActiveModule('dashboard');
   };
 
@@ -436,7 +559,7 @@ export default function App() {
 
   // Main Entry Point: Login Page
   if (!isAuthenticated) {
-    return <LoginPage onLoginSuccess={handleLoginSuccess} />;
+    return <LoginPage onLoginSuccess={handleLoginSuccess} laboratories={laboratories} />;
   }
 
   // Count active overdue items
@@ -529,6 +652,8 @@ export default function App() {
                   selectedLab={selectedLab}
                   onSelectLab={setSelectedLab}
                   onAddLabClick={() => setShowAddLabModal(true)}
+                  onDeleteLab={handleDeleteLaboratory}
+                  isHodAdmin={currentUserRole === 'HOD_ADMIN'}
                 />
               )}
 
@@ -572,7 +697,7 @@ export default function App() {
               )}
 
               {activeModule === 'lab_assistants' && (
-                <LabAssistantsView assistants={mockLabAssistants} />
+                <LabAssistantsView assistants={allLabAssistants} />
               )}
 
               {activeModule === 'issue_equipment' && (
@@ -691,100 +816,222 @@ export default function App() {
             className="fixed inset-0 bg-black/80 backdrop-blur-sm"
             onClick={() => setShowAddLabModal(false)}
           />
-          <div className="relative w-full max-w-lg rounded-2xl border border-[#382320] bg-[#160f0e] p-6 shadow-2xl text-[#f5efe8]">
-            <h3 className="text-base font-bold text-white">Register New Laboratory Facility</h3>
-            <p className="text-xs text-[#a39589] mt-1">
-              Add facility record with Building, Floor, Room number, and Lead Assistant.
-            </p>
-
-            <form onSubmit={handleAddLaboratorySubmit} className="mt-4 space-y-3.5 text-xs">
+          <div className="relative w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-2xl border border-[#382320] bg-[#160f0e] p-6 shadow-2xl text-[#f5efe8]">
+            <div className="flex items-start justify-between border-b border-[#281816] pb-3">
               <div>
-                <label className="block text-[#b8a89b] font-medium mb-1">Laboratory Name *</label>
-                <input
-                  required
-                  value={newLabName}
-                  onChange={(e) => setNewLabName(e.target.value)}
-                  placeholder="e.g. Nanomaterials & Cleanroom Facility"
-                  className="w-full rounded-xl border border-[#382320] bg-[#1c1312] px-3 py-2 text-xs text-white placeholder:text-[#6e5d52] focus:outline-none focus:border-red-600 transition"
-                />
+                <h3 className="text-base font-bold text-white">Register New Laboratory Facility</h3>
+                <p className="text-xs text-[#a39589] mt-0.5">
+                  Configure university facility specs and set up an independent Lab Assistant login account.
+                </p>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[#b8a89b] font-medium mb-1">Facility Code *</label>
-                  <input
-                    required
-                    value={newLabCode}
-                    onChange={(e) => setNewLabCode(e.target.value)}
-                    placeholder="LAB-NANO-101"
-                    className="w-full rounded-xl border border-[#382320] bg-[#1c1312] px-3 py-2 text-xs text-white placeholder:text-[#6e5d52] focus:outline-none focus:border-red-600 transition"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[#b8a89b] font-medium mb-1">Building *</label>
-                  <input
-                    required
-                    value={newLabBuilding}
-                    onChange={(e) => setNewLabBuilding(e.target.value)}
-                    placeholder="Science Complex B"
-                    className="w-full rounded-xl border border-[#382320] bg-[#1c1312] px-3 py-2 text-xs text-white placeholder:text-[#6e5d52] focus:outline-none focus:border-red-600 transition"
-                  />
-                </div>
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddLabModal(false)}
+                className="text-[#7d6c60] hover:text-white transition"
+              >
+                ✕
+              </button>
+            </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-[#b8a89b] font-medium mb-1">Floor</label>
-                  <input
-                    value={newLabFloor}
-                    onChange={(e) => setNewLabFloor(e.target.value)}
-                    placeholder="Floor 1"
-                    className="w-full rounded-xl border border-[#382320] bg-[#1c1312] px-3 py-2 text-xs text-white focus:outline-none focus:border-red-600 transition"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[#b8a89b] font-medium mb-1">Room No.</label>
-                  <input
-                    value={newLabRoom}
-                    onChange={(e) => setNewLabRoom(e.target.value)}
-                    placeholder="SCB-102"
-                    className="w-full rounded-xl border border-[#382320] bg-[#1c1312] px-3 py-2 text-xs text-white focus:outline-none focus:border-red-600 transition"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[#b8a89b] font-medium mb-1">Capacity</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={newLabCapacity}
-                    onChange={(e) => setNewLabCapacity(Number(e.target.value))}
-                    className="w-full rounded-xl border border-[#382320] bg-[#1c1312] px-3 py-2 text-xs text-white focus:outline-none focus:border-red-600 transition"
-                  />
-                </div>
-              </div>
-
+            <form onSubmit={handleAddLaboratorySubmit} className="mt-4 space-y-4 text-xs">
+              {/* Section 1: Facility Specifications */}
               <div>
-                <label className="block text-[#b8a89b] font-medium mb-1">Department</label>
-                <select
-                  value={newLabDept}
-                  onChange={(e) => setNewLabDept(e.target.value)}
-                  className="w-full rounded-xl border border-[#382320] bg-[#1c1312] px-3 py-2 text-xs text-white focus:outline-none focus:border-red-600 transition"
-                >
-                  <option value="Department of Electrical & Electronics Engineering Technology">
-                    Department of Electrical &amp; Electronics Engineering Technology
-                  </option>
-                  <option value="Department of Mechanical Engineering Technology">
-                    Department of Mechanical Engineering Technology
-                  </option>
-                  <option value="Department of Civil Engineering Technology">
-                    Department of Civil Engineering Technology
-                  </option>
-                  <option value="Department of Computer Science & IT">
-                    Department of Computer Science &amp; IT
-                  </option>
-                  <option value="Department of Petroleum & Chemical Technology">
-                    Department of Petroleum &amp; Chemical Technology
-                  </option>
-                </select>
+                <span className="text-[11px] font-semibold text-red-400 uppercase tracking-wider block mb-2">
+                  1. Laboratory Facility Specifications
+                </span>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[#b8a89b] font-medium mb-1">Laboratory Name *</label>
+                    <input
+                      required
+                      value={newLabName}
+                      onChange={(e) => setNewLabName(e.target.value)}
+                      placeholder="e.g. Nanomaterials & Cleanroom Facility"
+                      className="w-full rounded-xl border border-[#382320] bg-[#1c1312] px-3 py-2 text-xs text-white placeholder:text-[#6e5d52] focus:outline-none focus:border-red-600 transition"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[#b8a89b] font-medium mb-1">Facility Code *</label>
+                      <input
+                        required
+                        value={newLabCode}
+                        onChange={(e) => setNewLabCode(e.target.value)}
+                        placeholder="LAB-NANO-101"
+                        className="w-full rounded-xl border border-[#382320] bg-[#1c1312] px-3 py-2 text-xs text-white placeholder:text-[#6e5d52] focus:outline-none focus:border-red-600 transition"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[#b8a89b] font-medium mb-1">Building *</label>
+                      <input
+                        required
+                        value={newLabBuilding}
+                        onChange={(e) => setNewLabBuilding(e.target.value)}
+                        placeholder="Science Complex B"
+                        className="w-full rounded-xl border border-[#382320] bg-[#1c1312] px-3 py-2 text-xs text-white placeholder:text-[#6e5d52] focus:outline-none focus:border-red-600 transition"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[#b8a89b] font-medium mb-1">Floor</label>
+                      <input
+                        value={newLabFloor}
+                        onChange={(e) => setNewLabFloor(e.target.value)}
+                        placeholder="Floor 1"
+                        className="w-full rounded-xl border border-[#382320] bg-[#1c1312] px-3 py-2 text-xs text-white focus:outline-none focus:border-red-600 transition"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[#b8a89b] font-medium mb-1">Room No.</label>
+                      <input
+                        value={newLabRoom}
+                        onChange={(e) => setNewLabRoom(e.target.value)}
+                        placeholder="SCB-102"
+                        className="w-full rounded-xl border border-[#382320] bg-[#1c1312] px-3 py-2 text-xs text-white focus:outline-none focus:border-red-600 transition"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[#b8a89b] font-medium mb-1">Capacity</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={newLabCapacity}
+                        onChange={(e) => setNewLabCapacity(Number(e.target.value))}
+                        className="w-full rounded-xl border border-[#382320] bg-[#1c1312] px-3 py-2 text-xs text-white focus:outline-none focus:border-red-600 transition"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[#b8a89b] font-medium mb-1">Department</label>
+                      <select
+                        value={newLabDept}
+                        onChange={(e) => setNewLabDept(e.target.value)}
+                        className="w-full rounded-xl border border-[#382320] bg-[#1c1312] px-3 py-2 text-xs text-white focus:outline-none focus:border-red-600 transition"
+                      >
+                        <option value="Department of Electrical & Electronics Engineering Technology">
+                          Department of Electrical &amp; Electronics Engineering Technology
+                        </option>
+                        <option value="Department of Mechanical Engineering Technology">
+                          Department of Mechanical Engineering Technology
+                        </option>
+                        <option value="Department of Civil Engineering Technology">
+                          Department of Civil Engineering Technology
+                        </option>
+                        <option value="Department of Computer Science & IT">
+                          Department of Computer Science &amp; IT
+                        </option>
+                        <option value="Department of Petroleum & Chemical Technology">
+                          Department of Petroleum &amp; Chemical Technology
+                        </option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[#b8a89b] font-medium mb-1">Contact Extension</label>
+                      <input
+                        value={newLabExt}
+                        onChange={(e) => setNewLabExt(e.target.value)}
+                        placeholder="Ext. 2040"
+                        className="w-full rounded-xl border border-[#382320] bg-[#1c1312] px-3 py-2 text-xs text-white focus:outline-none focus:border-red-600 transition"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: Dedicated Lab Assistant & Login Credentials */}
+              <div className="pt-3 border-t border-[#261715]">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] font-semibold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <KeyRound className="h-3.5 w-3.5 text-amber-400" />
+                    2. Assigned Lab Assistant &amp; Login Credentials
+                  </span>
+                  <span className="text-[10px] text-emerald-400 font-medium bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-800/40">
+                    Separate Login
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#8a796e] mb-3">
+                  Provide an institutional email and password so this lab assistant can independently sign into this facility portal terminal.
+                </p>
+
+                <div className="space-y-3 rounded-xl border border-[#30201d] bg-[#1b1211] p-3.5">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[#b8a89b] font-medium mb-1">Assistant Full Name *</label>
+                      <input
+                        required
+                        value={newLabAssistantName}
+                        onChange={(e) => setNewLabAssistantName(e.target.value)}
+                        placeholder="e.g. Engr. Noman Ali Abbasi"
+                        className="w-full rounded-xl border border-[#382320] bg-[#140d0c] px-3 py-2 text-xs text-white placeholder:text-[#6e5d52] focus:outline-none focus:border-red-600 transition"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[#b8a89b] font-medium mb-1">Assistant Mobile / Phone</label>
+                      <input
+                        value={newLabAssistantPhone}
+                        onChange={(e) => setNewLabAssistantPhone(e.target.value)}
+                        placeholder="+92 300 1234567"
+                        className="w-full rounded-xl border border-[#382320] bg-[#140d0c] px-3 py-2 text-xs text-white placeholder:text-[#6e5d52] focus:outline-none focus:border-red-600 transition"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[#b8a89b] font-medium mb-1 flex items-center gap-1">
+                        <Mail className="h-3 w-3 text-red-400" />
+                        Login Email Address *
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={newLabAssistantEmail}
+                        onChange={(e) => setNewLabAssistantEmail(e.target.value)}
+                        placeholder="noman.nano@bbsutsd.edu.pk"
+                        className="w-full rounded-xl border border-[#382320] bg-[#140d0c] px-3 py-2 text-xs text-white font-mono placeholder:text-[#6e5d52] focus:outline-none focus:border-red-600 transition"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[#b8a89b] font-medium mb-1 flex items-center gap-1">
+                        <Lock className="h-3 w-3 text-red-400" />
+                        Login Password *
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showNewAssistantPassword ? 'text' : 'password'}
+                          required
+                          value={newLabAssistantPassword}
+                          onChange={(e) => setNewLabAssistantPassword(e.target.value)}
+                          placeholder="Password for this assistant"
+                          className="w-full rounded-xl border border-[#382320] bg-[#140d0c] pl-3 pr-8 py-2 text-xs text-white font-mono placeholder:text-[#6e5d52] focus:outline-none focus:border-red-600 transition"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewAssistantPassword(!showNewAssistantPassword)}
+                          className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-[#7d6c60] hover:text-white"
+                        >
+                          {showNewAssistantPassword ? (
+                            <EyeOff className="h-3.5 w-3.5" />
+                          ) : (
+                            <Eye className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 text-[10px] text-[#8a796e] pt-1">
+                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                    <span>
+                      Credentials will be saved in Firestore and will immediately allow signing in with this email and password.
+                    </span>
+                  </div>
+                </div>
               </div>
 
               <div className="pt-3 border-t border-[#241715] flex justify-end gap-2">
@@ -799,7 +1046,7 @@ export default function App() {
                   type="submit"
                   className="rounded-xl bg-gradient-to-r from-red-950 via-red-900 to-red-950 border border-red-700/60 px-4 py-2 text-xs font-semibold text-white shadow-[0_0_15px_rgba(220,38,38,0.35)] hover:shadow-[0_0_24px_rgba(220,38,38,0.55)] transition"
                 >
-                  Save Facility
+                  Save Facility &amp; Create Assistant Account
                 </button>
               </div>
             </form>

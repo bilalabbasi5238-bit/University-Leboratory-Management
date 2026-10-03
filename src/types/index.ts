@@ -60,6 +60,12 @@ export interface Laboratory {
   totalEquipmentCount: number;
   activeIssuesCount: number;
   contactExtension: string;
+  // Specific Lab Assistant login credentials & profile
+  assistantName?: string;
+  assistantEmail?: string;
+  assistantPassword?: string;
+  assistantStaffId?: string;
+  assistantPhone?: string;
 }
 
 export type IssueStatus = 'active' | 'returned' | 'overdue' | 'damaged';

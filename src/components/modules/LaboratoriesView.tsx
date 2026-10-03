@@ -11,6 +11,10 @@ import {
   ChevronRight,
   X,
   Zap,
+  Mail,
+  KeyRound,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 import { Laboratory, Equipment } from '../../types';
 
@@ -20,6 +24,8 @@ interface LaboratoriesViewProps {
   selectedLab: Laboratory | null;
   onSelectLab: (lab: Laboratory | null) => void;
   onAddLabClick: () => void;
+  onDeleteLab?: (labId: string) => void;
+  isHodAdmin?: boolean;
 }
 
 export const LaboratoriesView: React.FC<LaboratoriesViewProps> = ({
@@ -28,9 +34,12 @@ export const LaboratoriesView: React.FC<LaboratoriesViewProps> = ({
   selectedLab,
   onSelectLab,
   onAddLabClick,
+  onDeleteLab,
+  isHodAdmin = true,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('all');
+  const [labToDelete, setLabToDelete] = useState<Laboratory | null>(null);
 
   const departments = Array.from(new Set(laboratories.map((l) => l.department)));
 
@@ -138,7 +147,22 @@ export const LaboratoriesView: React.FC<LaboratoriesViewProps> = ({
                       {lab.status}
                     </span>
                   </div>
-                  <ChevronRight className="h-4 w-4 text-[#7d6c60] group-hover:text-red-400 group-hover:translate-x-0.5 transition-all" />
+                  <div className="flex items-center gap-1.5">
+                    {onDeleteLab && isHodAdmin && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLabToDelete(lab);
+                        }}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#382320] bg-[#1a1211] text-[#8a796e] hover:border-red-600 hover:bg-red-950 hover:text-red-300 transition shadow-xs"
+                        title={`Delete ${lab.name}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    <ChevronRight className="h-4 w-4 text-[#7d6c60] group-hover:text-red-400 group-hover:translate-x-0.5 transition-all" />
+                  </div>
                 </div>
 
                 <h3 className="mt-3 text-base font-bold text-white group-hover:text-red-200 transition">
@@ -157,6 +181,12 @@ export const LaboratoriesView: React.FC<LaboratoriesViewProps> = ({
                     <Users className="h-3.5 w-3.5 text-[#7d6c60] shrink-0" />
                     <span className="truncate">Lead: {lab.assignedAssistantName}</span>
                   </div>
+                  {lab.assistantEmail && (
+                    <div className="flex items-center gap-2 text-[11px] text-red-300/90 font-mono">
+                      <Mail className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                      <span className="truncate">{lab.assistantEmail}</span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
                     <Phone className="h-3.5 w-3.5 text-[#7d6c60] shrink-0" />
                     <span className="font-mono text-[11px] text-[#8a796e]">{lab.contactExtension}</span>
@@ -200,18 +230,33 @@ export const LaboratoriesView: React.FC<LaboratoriesViewProps> = ({
                 Building: {selectedLab.building} · {selectedLab.floor} · Room {selectedLab.roomNumber} · Contact: {selectedLab.contactExtension}
               </p>
             </div>
-            <button
-              onClick={() => onSelectLab(null)}
-              className="text-[#7d6c60] hover:text-white transition"
-            >
-              <X className="h-5 w-5" />
-            </button>
+            <div className="flex items-center gap-2">
+              {onDeleteLab && isHodAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setLabToDelete(selectedLab)}
+                  className="flex items-center gap-1.5 rounded-xl border border-red-800/80 bg-red-950/40 px-3 py-1.5 text-xs font-semibold text-red-300 hover:bg-red-900/60 hover:text-white transition shadow-sm"
+                >
+                  <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                  <span>Delete Facility</span>
+                </button>
+              )}
+              <button
+                onClick={() => onSelectLab(null)}
+                className="text-[#7d6c60] hover:text-white transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
           </div>
 
           <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="rounded-xl border border-[#2e1d1b] bg-[#1c1312] p-4">
               <span className="text-[11px] font-semibold text-red-400/90 uppercase tracking-wider">Supervising Assistant</span>
               <p className="text-sm font-bold text-white mt-1">{selectedLab.assignedAssistantName}</p>
+              {selectedLab.assistantEmail && (
+                <p className="text-xs text-red-300 font-mono mt-0.5 truncate">{selectedLab.assistantEmail}</p>
+              )}
               <p className="text-xs text-[#7d6c60]">Lead Technical Operator</p>
             </div>
 
@@ -229,6 +274,39 @@ export const LaboratoriesView: React.FC<LaboratoriesViewProps> = ({
               <p className="text-xs text-[#7d6c60]">BBSUTSD Khairpur</p>
             </div>
           </div>
+
+          {/* Dedicated Assistant Login Credentials Information */}
+          {selectedLab.assistantEmail && (
+            <div className="mt-4 rounded-xl border border-red-900/60 bg-[#1e1312] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <span className="text-[11px] font-semibold text-red-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <KeyRound className="h-3.5 w-3.5 text-red-400" />
+                  Assigned Lab Assistant Portal Login Credentials
+                </span>
+                <div className="mt-1.5 flex flex-wrap items-center gap-4 text-xs font-mono">
+                  <div>
+                    <span className="text-[#8a796e]">Email: </span>
+                    <span className="text-white font-semibold">{selectedLab.assistantEmail}</span>
+                  </div>
+                  {selectedLab.assistantPassword && (
+                    <div>
+                      <span className="text-[#8a796e]">Password: </span>
+                      <span className="text-amber-300 font-semibold">{selectedLab.assistantPassword}</span>
+                    </div>
+                  )}
+                  {selectedLab.assistantStaffId && (
+                    <div>
+                      <span className="text-[#8a796e]">Staff ID: </span>
+                      <span className="text-red-300">{selectedLab.assistantStaffId}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400 bg-emerald-950/40 px-2.5 py-1 rounded-lg border border-emerald-800/50 shrink-0">
+                ✓ Portal Access Enabled
+              </span>
+            </div>
+          )}
 
           <div className="mt-6">
             <h3 className="text-sm font-bold text-white mb-3">
@@ -262,6 +340,61 @@ export const LaboratoriesView: React.FC<LaboratoriesViewProps> = ({
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Delete Laboratory Confirmation Modal */}
+      {labToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm"
+            onClick={() => setLabToDelete(null)}
+          />
+          <div className="relative w-full max-w-md rounded-2xl border border-red-900/80 bg-[#160f0e] p-6 shadow-2xl text-[#f5efe8]">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-red-950/80 border border-red-800 text-red-400 mb-3 shadow-[0_0_15px_rgba(220,38,38,0.3)]">
+              <AlertTriangle className="h-6 w-6" />
+            </div>
+            <h3 className="text-base font-bold text-white text-center">
+              Confirm Laboratory Deletion
+            </h3>
+            <p className="text-xs text-[#a39589] text-center mt-1.5 leading-relaxed">
+              Are you sure you want to permanently delete{' '}
+              <span className="font-semibold text-white">{labToDelete.name}</span> (
+              <span className="font-mono text-red-400 font-semibold">{labToDelete.code}</span>)?
+            </p>
+
+            <div className="mt-4 rounded-xl border border-[#30201d] bg-[#1a1211] p-3.5 text-xs text-[#a39589] space-y-1.5">
+              <p className="text-[11px] text-amber-300 font-semibold">⚠️ Deletion consequences:</p>
+              <ul className="list-disc list-inside text-[11px] space-y-1 text-[#8a796e]">
+                <li>Removes this facility record permanently from Firebase Firestore</li>
+                <li>Equipment assigned to this lab will be unassigned</li>
+                <li>Revokes portal access credentials for {labToDelete.assignedAssistantName}</li>
+              </ul>
+            </div>
+
+            <div className="mt-5 flex gap-2.5">
+              <button
+                type="button"
+                onClick={() => setLabToDelete(null)}
+                className="flex-1 rounded-xl border border-[#382320] bg-[#1c1312] py-2.5 text-xs font-semibold text-stone-300 hover:bg-[#251917] transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onDeleteLab) {
+                    onDeleteLab(labToDelete.id);
+                  }
+                  setLabToDelete(null);
+                }}
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-red-950 via-red-900 to-red-950 border border-red-700 py-2.5 text-xs font-semibold text-white shadow-[0_0_15px_rgba(220,38,38,0.4)] hover:shadow-[0_0_25px_rgba(220,38,38,0.6)] transition"
+              >
+                <Trash2 className="h-3.5 w-3.5 text-red-300" />
+                <span>Yes, Delete Facility</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

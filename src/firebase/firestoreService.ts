@@ -4,6 +4,7 @@ import {
   getDocs,
   setDoc,
   updateDoc,
+  deleteDoc,
   onSnapshot,
   query,
   orderBy,
@@ -49,6 +50,18 @@ export async function saveLaboratoryToFirestore(lab: Laboratory): Promise<void> 
     await setDoc(labDocRef, lab, { merge: true });
   } catch (error) {
     console.warn('[Firestore] Error saving laboratory:', error);
+  }
+}
+
+/**
+ * Delete laboratory facility from Firestore
+ */
+export async function deleteLaboratoryFromFirestore(labId: string): Promise<void> {
+  try {
+    const labDocRef = doc(db, COLLECTIONS.LABORATORIES, labId);
+    await deleteDoc(labDocRef);
+  } catch (error) {
+    console.warn('[Firestore] Error deleting laboratory:', error);
   }
 }
 

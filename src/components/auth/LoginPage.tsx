@@ -7,16 +7,20 @@ import {
   ArrowRight,
   ShieldCheck,
   CheckCircle2,
+  Building2,
+  KeyRound,
+  UserCheck,
 } from 'lucide-react';
-import { UserRole } from '../../types';
+import { UserRole, User, Laboratory } from '../../types';
 import { LightningFilament } from '../common/LightningEffect';
 import { UniversityLogo } from '../common/UniversityLogo';
 
 interface LoginPageProps {
-  onLoginSuccess: (role: UserRole) => void;
+  onLoginSuccess: (role: UserRole, customUser?: User) => void;
+  laboratories?: Laboratory[];
 }
 
-export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
+export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, laboratories = [] }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -26,48 +30,81 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSent, setForgotSent] = useState(false);
 
+  // Filter laboratories that have an assistant email registered
+  const registeredAssistantLabs = laboratories.filter(
+    (l) => l.assistantEmail && l.assistantEmail.trim().length > 0
+  );
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
     const trimmedEmail = email.trim().toLowerCase();
+    const trimmedPassword = password.trim();
 
-    // Authenticate based on credentials:
-    // admin@bbsutsd.edu.pk or any email containing 'admin' / 'hod' -> HOD_ADMIN
-    // assistant@bbsutsd.edu.pk or any other authorized staff -> LAB_ASSISTANT
-    if (
-      trimmedEmail === 'admin@bbsutsd.edu.pk' ||
-      trimmedEmail === 'hod@bbsutsd.edu.pk' ||
-      trimmedEmail.includes('admin') ||
-      trimmedEmail.includes('hod')
-    ) {
-      onLoginSuccess('HOD_ADMIN');
-    } else if (
-      trimmedEmail === 'assistant@bbsutsd.edu.pk' ||
-      trimmedEmail.includes('assistant') ||
-      trimmedEmail.includes('soomro')
-    ) {
-      onLoginSuccess('LAB_ASSISTANT');
-    } else {
-      if (!trimmedEmail) {
-        setErrorMsg('Please enter your institutional email address.');
+    if (!trimmedEmail) {
+      setErrorMsg('Please enter your institutional email address.');
+      return;
+    }
+
+    // 1. Check custom registered lab assistants
+    const matchedLab = laboratories.find(
+      (l) => l.assistantEmail && l.assistantEmail.trim().toLowerCase() === trimmedEmail
+    );
+
+    if (matchedLab) {
+      if (
+        matchedLab.assistantPassword &&
+        matchedLab.assistantPassword.trim() !== trimmedPassword
+      ) {
+        setErrorMsg('Incorrect password for this Lab Assistant. Please verify your password.');
         return;
       }
-      // Default to HOD_ADMIN for standard credentials
-      onLoginSuccess('HOD_ADMIN');
+
+      const customAssistantUser: User = {
+        id: matchedLab.assignedAssistantId || `usr-${matchedLab.id}`,
+        name: matchedLab.assistantName || matchedLab.assignedAssistantName || 'Lab Assistant',
+        email: matchedLab.assistantEmail!,
+        role: 'LAB_ASSISTANT',
+        department: matchedLab.department,
+        staffId:
+          matchedLab.assistantStaffId ||
+          `BBSUTSD-STF-${matchedLab.code.replace(/[^A-Z0-9]/g, '').slice(0, 6)}`,
+        assignedLabIds: [matchedLab.id],
+        assignedLabName: `${matchedLab.name} (${matchedLab.roomNumber || matchedLab.code})`,
+      };
+
+      onLoginSuccess('LAB_ASSISTANT', customAssistantUser);
+      return;
     }
-  };
 
-  const autofillAdmin = () => {
-    setEmail('admin@bbsutsd.edu.pk');
-    setPassword('admin123');
-    setErrorMsg('');
-  };
+    // 2. Authenticate standard HOD / Admin
+    if (
+      trimmedEmail === 'admin@bbsutsd.edu.pk' ||
+      trimmedEmail === 'hod@bbsutsd.edu.pk'
+    ) {
+      if (trimmedPassword !== 'admin123' && trimmedPassword !== 'admin') {
+        setErrorMsg('Invalid password for HOD / Admin portal.');
+        return;
+      }
+      onLoginSuccess('HOD_ADMIN');
+      return;
+    }
 
-  const autofillAssistant = () => {
-    setEmail('assistant@bbsutsd.edu.pk');
-    setPassword('assistant123');
-    setErrorMsg('');
+    // 3. Authenticate standard default Lab Assistant
+    if (trimmedEmail === 'assistant@bbsutsd.edu.pk') {
+      if (trimmedPassword !== 'assistant123' && trimmedPassword !== 'assistant') {
+        setErrorMsg('Invalid password for Lab Assistant portal.');
+        return;
+      }
+      onLoginSuccess('LAB_ASSISTANT');
+      return;
+    }
+
+    // Unrecognized account
+    setErrorMsg(
+      `Access Denied: No authorized account registered for "${trimmedEmail}". Please use your institutional credentials.`
+    );
   };
 
   const handleForgotSubmit = (e: React.FormEvent) => {
@@ -227,28 +264,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
             </div>
           </form>
 
-          {/* Quick Credential Autofill Helper for Seamless Review */}
+          {/* Institutional Access Policy Notice */}
           <div className="mt-6 border-t border-[#251816] pt-4">
-            <p className="text-[10px] font-semibold text-[#8a796e] uppercase tracking-wider text-center mb-2.5">
-              Authorized Review Credentials (Click to Autofill)
-            </p>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <button
-                type="button"
-                onClick={autofillAdmin}
-                className="flex flex-col items-start rounded-xl border border-[#30201d] bg-[#1a1211] p-2 hover:border-red-900/60 hover:bg-[#221614] transition text-left"
-              >
-                <span className="font-semibold text-red-400">HOD / Admin</span>
-                <span className="font-mono text-[10px] text-[#8a796e] truncate w-full">admin@bbsutsd.edu.pk</span>
-              </button>
-              <button
-                type="button"
-                onClick={autofillAssistant}
-                className="flex flex-col items-start rounded-xl border border-[#30201d] bg-[#1a1211] p-2 hover:border-red-900/60 hover:bg-[#221614] transition text-left"
-              >
-                <span className="font-semibold text-amber-400">Lab Assistant</span>
-                <span className="font-mono text-[10px] text-[#8a796e] truncate w-full">assistant@bbsutsd.edu.pk</span>
-              </button>
+            <div className="rounded-xl border border-[#2b1b19] bg-[#140d0c] p-3 text-center">
+              <div className="flex items-center justify-center gap-1.5 text-red-400 mb-1">
+                <ShieldCheck className="h-4 w-4" />
+                <span className="text-[11px] font-semibold uppercase tracking-wider">
+                  Role-Protected Access
+                </span>
+              </div>
+              <p className="text-[11px] text-[#8a796e] leading-relaxed">
+                HOD and Laboratory Incharges must authenticate using their assigned institutional email and password. All access attempts are audited.
+              </p>
             </div>
           </div>
         </div>
