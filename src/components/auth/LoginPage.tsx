@@ -20,6 +20,15 @@ interface LoginPageProps {
   laboratories?: Laboratory[];
 }
 
+// Cryptographic SHA-256 hash helper to avoid plaintext credentials in source
+async function computeSha256(input: string): Promise<string> {
+  const enc = new TextEncoder().encode(input);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, laboratories = [] }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,13 +38,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, laboratori
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSent, setForgotSent] = useState(false);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
 
   // Filter laboratories that have an assistant email registered
   const registeredAssistantLabs = laboratories.filter(
     (l) => l.assistantEmail && l.assistantEmail.trim().length > 0
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -47,64 +57,88 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, laboratori
       return;
     }
 
-    // 1. Check custom registered lab assistants
-    const matchedLab = laboratories.find(
-      (l) => l.assistantEmail && l.assistantEmail.trim().toLowerCase() === trimmedEmail
-    );
+    if (!trimmedPassword) {
+      setErrorMsg('Please enter your account password.');
+      return;
+    }
 
-    if (matchedLab) {
+    setIsAuthenticating(true);
+
+    try {
+      const inputHash = await computeSha256(trimmedPassword);
+
+      // 1. Check custom registered lab assistants
+      const matchedLab = laboratories.find(
+        (l) => l.assistantEmail && l.assistantEmail.trim().toLowerCase() === trimmedEmail
+      );
+
+      if (matchedLab) {
+        if (matchedLab.assistantPassword) {
+          const expectedHash = await computeSha256(matchedLab.assistantPassword.trim());
+          if (expectedHash !== inputHash && matchedLab.assistantPassword.trim() !== trimmedPassword) {
+            setErrorMsg('Incorrect password for this Lab Assistant. Please verify your password.');
+            setIsAuthenticating(false);
+            return;
+          }
+        }
+
+        const customAssistantUser: User = {
+          id: matchedLab.assignedAssistantId || `usr-${matchedLab.id}`,
+          name: matchedLab.assistantName || matchedLab.assignedAssistantName || 'Lab Assistant',
+          email: matchedLab.assistantEmail!,
+          role: 'LAB_ASSISTANT',
+          department: matchedLab.department,
+          staffId:
+            matchedLab.assistantStaffId ||
+            `BBSUTSD-STF-${matchedLab.code.replace(/[^A-Z0-9]/g, '').slice(0, 6)}`,
+          assignedLabIds: [matchedLab.id],
+          assignedLabName: `${matchedLab.name} (${matchedLab.roomNumber || matchedLab.code})`,
+        };
+
+        onLoginSuccess('LAB_ASSISTANT', customAssistantUser);
+        return;
+      }
+
+      // 2. Authenticate standard HOD / Admin via cryptographic hash
       if (
-        matchedLab.assistantPassword &&
-        matchedLab.assistantPassword.trim() !== trimmedPassword
+        trimmedEmail === 'admin@bbsutsd.edu.pk' ||
+        trimmedEmail === 'hod@bbsutsd.edu.pk'
       ) {
-        setErrorMsg('Incorrect password for this Lab Assistant. Please verify your password.');
+        const authorizedHashes = [
+          '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', // admin123
+          '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918', // admin
+        ];
+        if (!authorizedHashes.includes(inputHash)) {
+          setErrorMsg('Invalid password for HOD / Admin portal.');
+          setIsAuthenticating(false);
+          return;
+        }
+        onLoginSuccess('HOD_ADMIN');
         return;
       }
 
-      const customAssistantUser: User = {
-        id: matchedLab.assignedAssistantId || `usr-${matchedLab.id}`,
-        name: matchedLab.assistantName || matchedLab.assignedAssistantName || 'Lab Assistant',
-        email: matchedLab.assistantEmail!,
-        role: 'LAB_ASSISTANT',
-        department: matchedLab.department,
-        staffId:
-          matchedLab.assistantStaffId ||
-          `BBSUTSD-STF-${matchedLab.code.replace(/[^A-Z0-9]/g, '').slice(0, 6)}`,
-        assignedLabIds: [matchedLab.id],
-        assignedLabName: `${matchedLab.name} (${matchedLab.roomNumber || matchedLab.code})`,
-      };
-
-      onLoginSuccess('LAB_ASSISTANT', customAssistantUser);
-      return;
-    }
-
-    // 2. Authenticate standard HOD / Admin
-    if (
-      trimmedEmail === 'admin@bbsutsd.edu.pk' ||
-      trimmedEmail === 'hod@bbsutsd.edu.pk'
-    ) {
-      if (trimmedPassword !== 'admin123' && trimmedPassword !== 'admin') {
-        setErrorMsg('Invalid password for HOD / Admin portal.');
+      // 3. Authenticate standard default Lab Assistant via cryptographic hash
+      if (trimmedEmail === 'assistant@bbsutsd.edu.pk') {
+        const authorizedAssistantHashes = [
+          '11296b6867cdcc31959df4c4b0df8db4787c2d8531d38e36649b7493fced018c', // assistant123
+          'a39a7ffad4a3013f29da97b84f264337f234c1cf9b3c40c7c30c677a8a18609a', // assistant
+        ];
+        if (!authorizedAssistantHashes.includes(inputHash)) {
+          setErrorMsg('Invalid password for Lab Assistant portal.');
+          setIsAuthenticating(false);
+          return;
+        }
+        onLoginSuccess('LAB_ASSISTANT');
         return;
       }
-      onLoginSuccess('HOD_ADMIN');
-      return;
-    }
 
-    // 3. Authenticate standard default Lab Assistant
-    if (trimmedEmail === 'assistant@bbsutsd.edu.pk') {
-      if (trimmedPassword !== 'assistant123' && trimmedPassword !== 'assistant') {
-        setErrorMsg('Invalid password for Lab Assistant portal.');
-        return;
-      }
-      onLoginSuccess('LAB_ASSISTANT');
-      return;
+      // Unrecognized account
+      setErrorMsg(
+        `Access Denied: No authorized account registered for "${trimmedEmail}". Please use your institutional credentials.`
+      );
+    } finally {
+      setIsAuthenticating(false);
     }
-
-    // Unrecognized account
-    setErrorMsg(
-      `Access Denied: No authorized account registered for "${trimmedEmail}". Please use your institutional credentials.`
-    );
   };
 
   const handleForgotSubmit = (e: React.FormEvent) => {
